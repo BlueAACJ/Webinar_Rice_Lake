@@ -1,0 +1,66 @@
+-- Scale Aliases
+Scale1    : constant integer := 1;
+
+-- Digital I/O Aliases
+DIOCRD0   : constant integer := 0;
+Start     : constant integer := 1;
+Full      : constant integer := 2;
+Empty     : constant integer := 3;
+Fill      : constant integer := 4;
+Disch     : constant integer := 5;
+DIO0_6    : constant integer := 6;
+DIO0_7    : constant integer := 7;
+DIO0_8    : constant integer := 8;
+
+
+
+-- Analog Output Aliases
+
+-- Database Type Definitions and Field Aliases
+type ProductDatabase is database ("Product")
+        ID: String;
+      Name: String;
+    Target: Real;
+end database;
+
+Product_ID       : constant integer := 1;
+Product_Name     : constant integer := 2;
+Product_Target   : constant integer := 3;
+
+
+
+-- Serial Port Aliases
+Port1     : constant integer := 1;
+Port2     : constant integer := 2;
+Port3     : constant integer := 3;
+Port4     : constant integer := 4;
+
+-- Ethernet Communication Aliases
+TCPS      : constant string := "TCPS";
+UDPS      : constant string := "UDPS";
+TCPC1     : constant string := "TCPC1";
+TCPC2     : constant string := "TCPC2";
+
+-- Setpoint Aliases
+
+-- Widget Aliases
+lbName    : constant integer := 2;
+lbID      : constant integer := 3;
+lbTarget  : constant integer := 4;
+lbBtn2    : constant integer := 5;
+lbBtn1    : constant integer := 6;
+lbBtn22   : constant integer := 7;
+lbBtn11   : constant integer := 8;
+bar9      : constant integer := 9;
+line10    : constant integer := 10;
+lBStar    : constant integer := 11;
+lbl12     : constant integer := 12;
+lbBar     : constant integer := 13;
+sym14     : constant integer := 14;
+sym15     : constant integer := 15;
+sym16     : constant integer := 16;
+sym17     : constant integer := 17;
+sym18     : constant integer := 18;
+
+USBPRN    : constant string := "USBPRN";
+ADVPRN    : constant string := "ADVPRN";

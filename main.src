@@ -1,0 +1,267 @@
+program WebinarRiceLake;
+#include WebinarRiceLake.iri
+-- Estados de un flujo de programa ¿?
+type Entrymodes is (noMode, EnterID, EnterName, Entertarget);
+
+-- Variable Global
+g_Entrymode : Entrymodes;
+
+-- Variable Global Base de Datos 
+Product : ProductDatabase;
+g_iUpdate : integer;
+
+-- Variables de batcheo 
+-- Retrasar Inicio, Llenado, Retrasar Llenado, Descarga e Inactivo
+type Batchmodes is (DelayStart, Filling, DelayFull, Discharge, Idle);
+
+-- variable Global para estados del batcheo
+g_Batchmode : Batchmodes;
+
+-- Contador 
+g_iCounter : integer;
+
+-- Adaptación de Codigo duplicado a Procedimiento para empezar el batcheo 
+procedure StartRoutine;
+begin
+  -- Empezar el Timer Continuo 
+  g_Batchmode := DelayStart;
+  -- Contador 
+  g_iCounter := 0;
+  -- Timer numero 2 , 10th of second
+  -- cada 
+  SetTimer(2, 10);
+  -- TimerContinuous 10 veces por segundo se hara lo del 
+  -- handler del Timer 2 
+  -- Los timer sirven para empezar pausar y volver a iniciar 
+  -- Ver lo que está pasando en batch 
+  SetTimerMode(2, TimerContinuous);
+  StartTimer(2);
+end;
+
+-- Nombre 2 por la tarjeta de entrada 2 en el video porque es el slot 2, 0 porque en mi slot es 0 
+-- Activate porque la entrada puede activar, Deactivate porque desactiva 
+handler DigInS0B1Activate;
+begin
+  StartRoutine;
+end;
+
+-- handler del Timer 1 OneShot
+-- Esto pasara cuando el timer 1 Termine 
+handler Timer1Trip;
+begin
+  -- Volveremos a la pantalla 1 
+  SelectScreen(1); 
+end;
+
+handler Timer2Trip;
+  -- Variables Locales 
+  rNet : real;
+  rGross : real;
+
+  -- Variables locales de los DigIO
+  iEmptyLimitSwitchStatus : Integer;
+  iFullLimitSwitchStatus : Integer;
+begin
+  -- Saber que esta pasando con mi batch todo el tiempo, las etapas -- 
+
+  -- Cuando el Batchmode inicia 
+  -- Cuando Se inicia el timer DelayStart
+  if g_Batchmode = DelayStart then
+    -- cada que entre aca agregare +1 al contador 
+    g_iCounter := g_iCounter + 1;
+    -- Cuando llega a 30  inicia el llenado
+    if g_iCounter > 30 then 
+      -- Tarar la Bascula 1 
+      AcquireTare(1);
+      -- Pasamos al llenado 
+      g_Batchmode := Filling;
+    else
+      DisplayStatus("Retraso de 3 segundos");
+    end if;
+
+  -- Llenado Aca se activa un DigI/O porque "Abre" una compuerta 
+  elsif g_Batchmode = Filling then
+    -- Numero de báscula, unidad primaria y variable local donde se guardara 
+    GetNet(1, Primary, rNet);
+
+    -- 50 libras suele ser una variable que el usuario modifica
+    -- para saber que ya se lleno, utilizamos un DigI
+    GetDigIn(0, Full, iFullLimitSwitchStatus);
+    -- Limite de llenado llego al maximo 
+    if rNet >= 50 or iFullLimitSwitchStatus = 0 then 
+      -- Desactivamos DigIO porque ya se lleno ¿Como sabemos que ya lleno?
+      SetDigOut(0,Fill, 0); -- 0 de apagado 
+      -- reiniciamos el contador 
+      g_iCounter := 0;
+      -- Pasamos al siguiente paso del modo batch 
+      g_Batchmode := DelayFull;
+    else
+      -- Empezamos a llenar 
+      DisplayStatus("Llenando a 50 libras");
+
+      -- Activa DigI/O
+      -- La tarjeta 0, Alias "Fill" en la declaracion del Digio, 1 es encendido y 0 es apagado
+      SetDigOut(0, Fill, 1);
+    end if;
+
+  -- La báscula se lleno 
+  elsif g_Batchmode = DelayFull then
+    -- Sumamos uno al contador 
+    g_iCounter := g_iCounter + 1;
+    if g_iCounter > 30 then 
+      -- eliminar Tara 
+      ClearTare(1);
+      -- Modo Gross 
+      SetMode(1, Grossmode);
+      -- Siguiente paso de descarga
+      g_Batchmode := Discharge;
+    else
+      DisplayStatus("Delay Full");
+    end if;
+  
+  -- Descarga 
+  elsif g_Batchmode = Discharge then
+    GetGross(1, Primary, rGross);
+
+    -- Dig I, 
+    GetDigIn(0, Empty, iEmptyLimitSwitchStatus);
+    -- La descarga termina cuando el peso es menor a 10 
+    if rGross < 10 or iEmptyLimitSwitchStatus = 0 then -- Cuando el limite de descarga se desactiva 
+      -- Lo apagamos porque ya descargo 
+      SetDigOut(0,Disch, 0);
+      -- Modo btach a terminado 
+      g_Batchmode := Idle;
+      DisplayStatus("Batch Complete");
+    else 
+      -- Encendemos el DigO para descargar 
+      SetDigOut(0,Disch, 1);
+      DisplayStatus("Descargando");
+    end if;
+  end if;
+end;
+
+
+-- handler, Si algun widget se toda se activa
+handler widgetClicked;
+begin
+  -- Si tocan lbID pasa... (Tocar el boton)
+  if EventWidget = lbBtn1 or EventWidget = lbBtn11 then
+    PromptUser("Enter ID");
+    -- Empezar el modo de entrada de datos
+    g_Entrymode := EnterID;
+  -- Si toca el boton2... 
+  elsif EventWidget = lbBtn2 or EventWidget = lbBtn22 then
+    Print(AuxFmt1);
+
+  -- si tocal wl Widget1 (La bascula) entra a la sentencia 
+  elsif EventWidget = 1 then
+    -- Timer Numero de Timer, Tiempo 100 = 1Segundo 3 Segundos 
+    -- Se pueden ejecutar 32 Timers al mismo tiempo (Pregunta a Jose)
+    SetTimer(1,300);
+    -- CUando un Timer Termina es otro Evento/Handler
+    
+    --  Referencia al Timer en especifico 
+    -- TimerOneShot Significa que luego de los 3 segundos el timer va a terminar
+    SetTimerMode(1, TimerOneShot);
+    -- Programamos cuando el Timer va a empezar 
+    StartTimer(1);
+
+    -- Por propositos de Pruebas se hará un cambio de pantalla 
+    -- Pantalla numero 2 
+    SelectScreen(2);
+  elsif EventWidget = lBStar then
+    -- Se creo procedimiento para esta parte del codigo debido a que se duplica el codigo 
+    StartRoutine;
+  end if;
+end;
+
+-- Entrada el Usuario
+handler UserEntry;
+  -- variable Local, Toda Entrada es un String
+  -- i Integer, s String
+  sEntry : String;
+begin
+  -- Significa Cambiar valor de la variable :=
+  -- GetEntry solo se puede usar en handler User Entry
+  sEntry := GetEntry;
+
+  ClosePrompt;
+
+  -- Comparación
+  if g_Entrymode = EnterID then
+    SetLabelText(lbID, "ID: " + sEntry);
+
+    -- Impresion de Ticket agregar valor al ticket 
+    SetPrintText(1, sEntry);
+
+    -- Variable para buscar en la base de datos asigna ID 
+    Product.ID := sEntry;
+
+    -- Encontro el registro y mostrar el valor anterior 
+    if Product.FindFirst(Product_ID) = Sysok then 
+      -- bandera para pasar a la siguiente parte del codigo 
+      g_iUpdate := 1;
+      -- Set Entry muestra el valor que tiene Producto.Name teniendo en cuenta que encontro el registro
+      SetEntry(Product.Name);
+    else 
+      -- No Encontro el registro  
+      g_iUpdate := 0;
+    end if;
+
+    -- Abrir Promt para Name 
+    PromptUser("Enter Name");
+
+    -- Llama al siguiente Promt 
+    g_Entrymode := EnterName;
+    
+  elsif g_Entrymode = EnterName then
+    SetLabelText(lbName, "Name: " + sEntry);
+
+    -- Impresion de Ticket agregar valor al ticket 
+    SetPrintText(2, sEntry);
+
+    -- Si se modifica cambia el valor de Product.Name 
+    Product.Name := sEntry;
+
+    -- La bandera indica que el registro ya esta en la base de datos 
+    if g_iUpdate = 1 then
+      -- Muestra el valor del registro guardado en la base de datos de Target para ponerlo en el Promt donde entra 
+      SetEntry(RealToString(Product.Target,0,1));
+    end if;
+
+    -- Abrir el Promt para recibir target
+    PromptUser("Enter target");
+
+    -- Llama al siguiente promt 
+    g_Entrymode := Entertarget;
+
+  elsif g_Entrymode = Entertarget then
+    -- Abrir el Promt para recibir target
+    SetLabelText(lbTarget, "Target: " + sEntry + "lb");
+
+    -- Impresion de Ticket agregar valor al ticket 
+    SetPrintText(3, sEntry);
+    
+    -- Asigna el valor de Target desde teclado sEntry, en el caso que el registro ya exista al ser seteado y no modificado queda igual 
+    Product.Target := StringToReal(sEntry);
+
+    -- Valor de Estado No para salir del "Bucle de peticiones de información"
+    g_Entrymode := noMode;
+
+    if g_iUpdate = 0 then
+      -- No encontro el registro, agrega uno nuevo 
+      Product.Add;
+      DisplayStatus("Producto Guardado");
+    else
+      Product.Update;
+    end if;
+
+  end if;
+end;
+
+-- Esto es un Handler
+begin
+  SetLabelText(lbID, "ID: Valor inicial");
+  SetLabelText(lbName, "Name: Valor inicial");
+  SetLabelText(lbTarget, "Target: Valor inicial");
+end WebinarRiceLake;
